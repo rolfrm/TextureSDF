@@ -6,155 +6,257 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include <iron/types.h>
-#include <GL/glew.h>
-#include <GLFW/glfw3.h>
 #include <iron/log.h>
 #include <iron/mem.h> 
 #include <iron/fileio.h>
 #include <iron/time.h>
 #include <iron/utils.h>
-#include <iron/linmath.h>
 #include <iron/math.h>
-#include "gl_utils.h"
-#include<dlfcn.h>
+#include <dlfcn.h>
 #include <sys/mman.h>
 #include <icydb.h>
 #include "string_vector.h"
+#include "module.h"
+#include "event_table.h"
+#include "event_table.c"
+#include "event_table_weight.h"
+#include "event_table_weight.c"
 
-void * module_open(const char * name){
-  logd("Now opening '%s'\n", name);
-  return (void *) 1;
-  //void * module = dlopen(name, RTLD_NOW);
-  //return module;
-}
+#include "intern_string_vector_1.h"
+#include "intern_string_vector_2.h"
 
-void * module_symbol(void * module, const char * sym){
-  logd("Now loading sym '%s' from '%i'\n", sym, module);
-  return (void *) 2;
-  //return dlsym(module, sym);
-}
+typedef struct{
+  u128 X;
+  u128 Y;
+}u256;
 
-char * module_error(){
-  return dlerror();
-}
+#include "intern_string_vector_3.h"
+#include "intern_string_vector_1.c"
+#include "intern_string_vector_2.c"
+#include "intern_string_vector_3.c"
 
-typedef struct _module_data{
-  icy_vector * vec;
-}module_data;
+#include "distance_field.h"
 
-typedef struct _engine_context{
-  u32 context_id;
-}engine_context;
-engine_context current_context;
+#include "neon.h"
+#include "method_table.h"
+#include "method_table.c"
 
-// get/set module data gets static data related to the module.
-// uid is a unique ID that identifies the 
-void * get_module_data(module_data * md){
-  engine_context e = current_context;
-  if(md->vec == NULL || icy_vector_count(md->vec) <= e.context_id)
-    return NULL;
-  
-  return ((void **) icy_vector_lookup(md->vec, (icy_index){e.context_id}))[0];
-}
-
-void set_module_data(module_data * md, void * data){
-  if(md->vec == NULL)
-    md->vec = icy_vector_create(NULL, sizeof(void *));
-  
-  engine_context e = current_context;
-  while(icy_vector_count(md->vec) <= e.context_id)
-    icy_vector_alloc(md->vec);
-  ((void **)icy_vector_lookup(md->vec, (icy_index){e.context_id}))[0] = data;
-}
-
-
-
-
-string_vector * get_loaded_modules(){
-  static module_data _loaded_module;
-  string_vector * vec = NULL;
-  if(!(vec = get_module_data(&_loaded_module))){
+event_table_weight * get_event_table_weight(){
+  static module_data event_table_weight_data;
+  event_table_weight * table_weight;
+  if(!(table_weight = get_module_data(&event_table_weight_data))){
     char buf[100];
-    sprintf(buf, "imported_modules.%i", current_context.context_id);
-    vec = string_vector_create(buf);
-    set_module_data(&_loaded_module, vec);
+    sprintf(buf, "registered_events.weights.%i", current_context.context_id);
+    table_weight = event_table_weight_create(buf);
+    set_module_data(&event_table_weight_data, table_weight);
   }
-  return vec;
+  return table_weight;
+}
+u32 new_unique_id(){
+  static module_data id_data;
+  icy_mem * data_area;
+  if(NULL == (data_area = get_module_data(&id_data))){
+    char buf[100];
+    sprintf(buf, "intern_string_ids.%i", current_context.context_id);
+    data_area = icy_mem_create(buf);
+    set_module_data(&id_data, data_area);
+  }
+  u32 * ptr = data_area->ptr;
+  *ptr += 1;
+  return *ptr;
 }
 
+u32 intern_string(const char * string){
+  static module_data isvd_1, isvd_2, isvd_3;
+  intern_string_vector_1 * isv_1 = NULL;
+  intern_string_vector_2 * isv_2 = NULL;
+  intern_string_vector_3 * isv_3 = NULL;
+  if(!(isv_1 = get_module_data(&isvd_1))){
+    char buf[100];
+    sprintf(buf, "intern_string_1.%i", current_context.context_id);
+    isv_1 = intern_string_vector_1_create(buf);
+    set_module_data(&isvd_1, isv_1);
+    
+    sprintf(buf, "intern_string_2.%i", current_context.context_id);
+    isv_2 = intern_string_vector_2_create(buf);
+    set_module_data(&isvd_2, isv_2);
+    
+    sprintf(buf, "intern_string_3.%i", current_context.context_id);
+    isv_3 = intern_string_vector_3_create(buf);
+    set_module_data(&isvd_3, isv_3);
+  }else{
+    isv_2 = get_module_data(&isvd_2);
+    isv_3 = get_module_data(&isvd_3);
+  }
+  u32 length = strlen(string);
+  if(length < sizeof(u64)){
+    u64 v = 0;
+    memcpy(&v, string, length);
+    u32 key;
+    if(!intern_string_vector_1_try_get(isv_1, &v, &key)){
+      key = new_unique_id();
+      intern_string_vector_1_set(isv_1, v, key);
+    }
+    return key;
+  }else if(length < sizeof(u128)){
+    u128 v = 0;
+    memcpy(&v, string, length);
+    u32 key;
+    if(!intern_string_vector_2_try_get(isv_2, &v, &key)){
+      key = new_unique_id();
+      intern_string_vector_2_set(isv_2, v, key);
+    }
+    return key;
+  }else if(length < sizeof(u256)){
+    u256 v = {0};
+    memcpy(&v, string, length);
+    u32 key;
+    if(!intern_string_vector_3_try_get(isv_3, &v, &key)){
+      key = new_unique_id();
+      intern_string_vector_3_set(isv_3, v, key);
+    }
+    return key;
+  }else{
+    ERROR("Unable to create key for %s, length %i", string, length);
+    return 0;
+  }
+}
 
-int load_module(const char * name){
-  string_vector * loaded_modules = get_loaded_modules();
-  static module_data _loaded_vec;
-  string_vector * loaded_vec = NULL;
-  if(!(loaded_vec = get_module_data(&_loaded_vec))){
-    loaded_vec = string_vector_create(NULL);
-    set_module_data(&_loaded_vec, loaded_vec);
+method_table * get_method_table(){
+  static module_data method_table_data;
+  method_table * table = get_module_data(&method_table_data);
+  if(table == NULL){
+    table = method_table_create(NULL);
+    set_module_data(&method_table_data, table);
+  }
+  return table;
+}
+
+void register_method(u32 method, method_ptr f){
+  let table = get_method_table();
+  method_table_set(table, method, f);
+}
+
+method_ptr get_registered_method(u32 method){
+  let table = get_method_table();
+  method_ptr out = NULL;
+  if(!method_table_try_get(table, &method, &out))
+    return NULL;
+  return out;
+}
+
+void register_event(u32 method, u32 relative, bool after){
+  static module_data event_table_data;
+  
+  event_table * table;
+  event_table_weight * table_weight = get_event_table_weight();
+  if(!(table = get_module_data(&event_table_data))){
+    char buf[100];
+    sprintf(buf, "registered_events.%i", current_context.context_id);
+    table = event_table_create(buf);
+    set_module_data(&event_table_data, table);
+  }
+
+
+  f64 key, prevkey;
+  f64 scale, _scale;
+  if(method == 0){
+    event_table_set(table, 0, 0.0, 1.0);
+    event_table_weight_set(table_weight, 0.0, 0);
+    return;
   }
   
-  size_t idx = 0;
-  string_vector_index id;
-  while(string_vector_iterate(loaded_vec, &id, 1, &idx)){
-    char * _name = string_vector_lookup(loaded_vec, id);
-    if(_name == NULL)continue;
-    if(strcmp(_name, name) == 0){
-      logd("Module '%s' is already loaded..\n", name);
-      return -1;
+  ASSERT(event_table_try_get(table, &relative, &prevkey, &scale));
+  if(event_table_try_get(table, &method, &key, &_scale)){
+    return; // already registered.
+  }
+
+  while(event_table_weight_try_get(table_weight, &prevkey, NULL)){
+    if(after){
+
+      prevkey = prevkey + scale;
+      scale *= 0.5;
+      after = false;
+    }else{
+      prevkey = prevkey - scale;
+      scale *= 0.5;
+      after = true;
     }
   }
-  
 
-  logd("Loading module '%s'\n", name);
-  void * module = module_open(name);;
-  if(module == NULL){
-    loge("unable to load module '%s' %s\n", name, module_error());
-    ASSERT(false);
-    return -1;
+  event_table_weight_set(table_weight, prevkey, method);
+  event_table_set(table, method, prevkey, scale);
+}
+
+void test_register_event(){
+
+  register_event(0,0,false);
+  register_event(1,0,false);
+  register_event(2,0,false);
+  register_event(3,0, true);
+  register_event(4,1, true);
+  register_event(5,1, false);
+  register_event(6,0, true);
+  register_event(7,0, true);
+  register_event(8,0, true);
+  bool m1_called = false, m2_called = false, m3_called = false;
+  void m1(){
+    logd("M1 Called\n");
+    m1_called = true;
   }
 
-  void (* init_module)() = module_symbol(module, "init_module");
-  if(init_module == NULL){
-    loge("Unable to get 'init_module' from module '%s'\n", name);
-    return -1;
+  void m2(){
+    logd("M2 Called\n");
+    m2_called = true;
   }
 
-  var sidx = string_vector_alloc(loaded_vec, strlen(name) + 1);
-  char * _name = string_vector_lookup(loaded_vec, sidx);
-  strcpy(_name, name);
+  void m3(){
+    logd("M3 Called\n");
+    m3_called = true;
+  }
   
-  _name = string_vector_lookup(loaded_modules, sidx);
-  strcpy(_name, name);
+  register_method(3, m1);
+  register_method(5, m2);
+  register_method(6, m3);
   
-  return 0;
+  event_table_weight * table_weight = get_event_table_weight();
+  event_table_weight_print(table_weight);
+  logd("\n");
+  for(u32 i = 0; i < table_weight->count; i++){
+    logd("%f %i\n", table_weight->key[i + 1], table_weight->method[i + 1]);
+    method_ptr p = get_registered_method(table_weight->method[i + 1]);
+    if(p == NULL) continue;
+    p();
+  }
+  logd("\n");
+  ASSERT(m1_called && m2_called && m3_called);
 }
 
-
-void printError(const char * file, int line ){
-  u32 err = glGetError();
-  if(err != 0) logd("%s:%i : GL ERROR  %i\n", file, line, err);
+void intern_string_test(){
+  u32 x1 = intern_string("X");
+  u32 x2 = intern_string("X");
+  u32 x3 = intern_string("hello world");
+  u32 x4 = intern_string("hello world");
+  u32 x5 = intern_string("hello world2 Hello?");
+  u32 x6 = intern_string("hello world2");
+  ASSERT(x1 == x2);
+  ASSERT(x3 == x4);
+  ASSERT(x1 != x3);
+  ASSERT(x5 != x1);
+  ASSERT(x5 != x6);
+  ASSERT(x5 != x1);
+  ASSERT(x5 != x3); 
 }
 
-#define PRINTERR() printError(__FILE__, __LINE__);
-
-vec2 glfwGetNormalizedCursorPos(GLFWwindow * window){
-  double xpos, ypos;
-  glfwGetCursorPos(window, &xpos, &ypos);
-  int win_width, win_height;
-  glfwGetWindowSize(window, &win_width, &win_height);
-  return vec2_new((xpos / win_width * 2 - 1), -(ypos / win_height * 2 - 1));
-}
-
-
-
-
-module_data test_mod;
-int main(){
-
-  string_vector_test();
-  engine_context ctx = {1};
+void neon_engine_test(){
+  static module_data test_mod;
+  engine_context ctx = {3};
   current_context = ctx;
-
   
+  string_vector_test();
+  intern_string_test();
+
+
   ASSERT(!get_module_data(&test_mod));
   void *test_data = alloc0(10);
   set_module_data(&test_mod, test_data);
@@ -162,7 +264,6 @@ int main(){
   ASSERT(newv == test_data);
 
   current_context = (engine_context){2};
-
   {
     ASSERT(!get_module_data(&test_mod));
     void *test_data = alloc0(10);
@@ -172,109 +273,35 @@ int main(){
   }
   
   current_context = ctx;
-  
+
   ASSERT(get_module_data(&test_mod) == test_data);
-  ASSERT(0 == load_module("my_module.so"));
-  ASSERT(-1 == load_module("my_module.so"));
-  ASSERT(-1 == load_module("my_module.so"));
-  ASSERT(0 == load_module("my_module2.so"));
-  ASSERT(-1 == load_module("my_module2.so"));
-  ASSERT(-1 == load_module("my_module.so"));
-  
-  return 0;
-  /*
-  vec3 light_source_center = vec3_new(0,0,0);
-  
-  glfwInit();
-  
-  glfwWindowHint( GLFW_OPENGL_DEBUG_CONTEXT, true);
+  //ASSERT(0 == load_module("./game_module1.so"));
+  //ASSERT(-1 == load_module("./game_module1.so"));
 
-  GLFWwindow * win = glfwCreateWindow(512, 512, "Octree Rendering", NULL, NULL);
-  glfwMakeContextCurrent(win);
-  glfwSwapInterval(2);  
-  ASSERT(glewInit() == GLEW_OK);
-  
-  gl_init_debug_calls();
-  glClearColor(0.0, 0.0, 0.0, 0.0);
+  test_register_event();
+}
 
-  u32 verts_cnt = 32;
-  
-  u32 buffer[1];
-  glGenBuffers(1, buffer);
-  size_t vsize = verts_cnt * sizeof(f32);
-  float * fbuffer = alloc0(vsize * 2);
-  for(u32 i = 0; i < verts_cnt ; i++){
-    fbuffer[i * 2] = 0;
-    fbuffer[i * 2 + 1] = 0;
-  }
+void neon_engine_main(){
+  //distance_field_convert_test();
+  neon_engine_test();
 
-  glBindBuffer(GL_ARRAY_BUFFER, buffer[0]);
-  glBufferData(GL_ARRAY_BUFFER, sizeof(f32) * verts_cnt * 2, fbuffer, GL_STREAM_DRAW);
+  engine_context ctx = {1};
+  current_context = ctx;
+  register_event(0,0,false);  
+  ASSERT(0 == load_module("./game_module1.so"));
+  ASSERT(0 == load_module("./dist_module.so"));
 
-  glBindBuffer(GL_SHADER_STORAGE_BUFFER, buffer[0]);
-  glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, buffer[0]);
-
-  
-  u32 shader = compileShaderFromFile(GL_COMPUTE_SHADER, "comp.cs");
-  
-  u32 sar[] = {shader};
-  u32 prog = linkGlProgram(sar, 1);
-
-  glUseProgram(prog);
-  
-  glDispatchCompute(4,4,2);
-  //glFlush();
-  float * data = glMapBufferRange(GL_ARRAY_BUFFER, 0, verts_cnt * 2 * sizeof(float), GL_MAP_READ_BIT);
-  ASSERT(data != NULL);
-  for(u32 i =0 ; i < 32; i++)
-    logd("%f\n", data[i * 2]);
-  
-  return 0;
-  
-  vec2 cursorPos = vec2_zero;
-  void cursorMoved(GLFWwindow * win, double x, double y){
-
-  }
-  void keyfun(GLFWwindow* w,int k,int s,int a,int m){
-    UNUSED(w);UNUSED(k);UNUSED(s);UNUSED(m);
-    UNUSED(a);
-  }
-  
-  void mbfun(GLFWwindow * w, int button, int action, int mods){
-
-  }
-
-  void scrollfun(GLFWwindow * w, double xscroll, double yscroll){
-
-  }
-  glfwSetScrollCallback(win, scrollfun);
-  glfwSetKeyCallback(win, keyfun);
-  glfwSetCursorPosCallback(win, cursorMoved);
-  glfwSetMouseButtonCallback(win, mbfun);
-
-  float t = 0;
-  f128 current_time = timestampf();
-  while(glfwWindowShouldClose(win) == false){
+  while(true){
     u64 ts = timestamp();
-    //render_zoom *= 1.01;
-    t += 0.1;
-    //t = 0;
-    UNUSED(t);
-    //render_zoom = 2;
-    int up = glfwGetKey(win, GLFW_KEY_UP);
-    int down = glfwGetKey(win, GLFW_KEY_DOWN);
-    int right = glfwGetKey(win, GLFW_KEY_RIGHT);
-    int left = glfwGetKey(win, GLFW_KEY_LEFT);
-    int w = glfwGetKey(win, GLFW_KEY_W);
-    int s = glfwGetKey(win, GLFW_KEY_S);
-        
-    int width = 0, height = 0;
 
-    glfwGetWindowSize(win,&width, &height);
-
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    event_table_weight * table_weight = get_event_table_weight();
+    event_table_weight_print(table_weight);
+    for(u32 i = 0; i < table_weight->count; i++){
+      method_ptr p = get_registered_method(table_weight->method[i + 1]);
+      if(p == NULL) continue;
+      p();
+    }
     
-    glfwSwapBuffers(win);
     u64 ts2 = timestamp();
     var seconds_spent = ((double)(ts2 - ts) * 1e-6);
     
@@ -282,8 +309,11 @@ int main(){
     if(seconds_spent < 0.016){
       iron_sleep(0.016 - seconds_spent);
     }
-
-    glfwPollEvents();
-    }*/
+  }
 }
 
+int main(){
+  neon_engine_main();
+  
+  return 0;
+}

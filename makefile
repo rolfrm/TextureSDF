@@ -1,13 +1,14 @@
-OPT = -g3 -O0
-LIB_SOURCES1 = main.c stb_image.c gl_utils.c string_vector.c
+#OPT = -g0 -O4
+OPT = -g3 -Og
+LIB_SOURCES1 = main.c string_vector.c module.c
 LIB_SOURCES = $(addprefix src/, $(LIB_SOURCES1))
 CC = gcc
 TARGET = run.exe
 LIB_OBJECTS =$(LIB_SOURCES:.c=.o)
-LDFLAGS= -L. $(OPT) -Wextra 
-LIBS= -liron -lGL -lGLEW -lglfw -lm -licydb -ldl
+LDFLAGS= -L. $(OPT) -Wextra -rdynamic
+LIBS= -liron -licydb -ldl -lm
 ALL= $(TARGET)
-CFLAGS = -Isrc/ -Iinclude/ -std=gnu11 -c $(OPT) -Wall -Wextra -Werror=implicit-function-declaration -Wformat=0 -D_GNU_SOURCE -fdiagnostics-color -Werror -Wextra  -Wwrite-strings  -msse4.2 -Werror=maybe-uninitialized -DUSE_VALGRIND -DDEBUG
+CFLAGS = -Isrc/ -Iinclude/ -std=gnu11 -c $(OPT) -Wall -Wextra -Werror=implicit-function-declaration -Wformat=0 -D_GNU_SOURCE -fdiagnostics-color -Werror -Wextra  -Wwrite-strings -msse4.2 -Werror=maybe-uninitialized -DUSE_VALGRIND -DDEBUG
 
 $(TARGET): $(LIB_OBJECTS)
 	$(CC) $(LDFLAGS) $(LIB_OBJECTS) $(LIBS) -o $@

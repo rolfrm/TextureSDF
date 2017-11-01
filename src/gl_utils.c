@@ -11,16 +11,17 @@
 #include <iron/utils.h>
 #include "stb_image.h"
 #include "gl_utils.h"
+
 u32 loadImage(u8 * pixels, u32 width, u32 height, u32 channels){
   
-  GLuint tex;
+  GLuint tex = 0;
   glGenTextures(1, &tex);
 
   glBindTexture(GL_TEXTURE_2D, tex);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
   u32 intype = 0;
   switch(channels){
   case 1:
@@ -38,10 +39,82 @@ u32 loadImage(u8 * pixels, u32 width, u32 height, u32 channels){
   default:
     ERROR("Invalid number of channels %i", channels);
   }
-  glTexImage2D(GL_TEXTURE_2D, 0, intype, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
-  glGenerateMipmap(GL_TEXTURE_2D);
+u32 pixels_channels = 0;
+  switch(channels){
+  case 1:
+    pixels_channels = GL_RED;
+    break;
+  case 2:
+    pixels_channels = GL_RG;
+    break;
+  case 3:
+    pixels_channels = GL_RGB;
+    break;
+  case 4:
+    pixels_channels = GL_RGBA;
+    break;
+  default:
+    ERROR("Invalid number of channels %i", channels);
+  }  
+  
+  glTexImage2D(GL_TEXTURE_2D, 0, intype, width, height, 0, pixels_channels, GL_UNSIGNED_BYTE, pixels);
   return tex;
 }
+/*
+u32 loadImagef(float * pixels, u32 width, u32 height, u32 channels){
+  return loadImagefx(pixels, width, height, channels, GL_LINEAR);
+}
+
+u32 loadImagefx(float * pixels, u32 width, u32 height, u32 channels, int interp){
+  
+  GLuint tex = 0;
+  glGenTextures(1, &tex);
+
+  glBindTexture(GL_TEXTURE_2D, tex);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, interp);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, interp);
+  u32 intype = 0;
+  switch(channels){
+  case 1:
+    intype = GL_R32F;
+    break;
+  case 2:
+    intype = GL_RG32F;
+    break;
+  case 3:
+    intype = GL_RGB32F;
+    break;
+  case 4:
+    intype = GL_RGBA32F;
+    break;
+  default:
+    ERROR("Invalid number of channels %i", channels);
+  }
+  u32 pixels_channels = 0;
+  switch(channels){
+  case 1:
+    pixels_channels = GL_RED;
+    break;
+  case 2:
+    pixels_channels = GL_RG;
+    break;
+  case 3:
+    pixels_channels = GL_RGB;
+    break;
+  case 4:
+    pixels_channels = GL_RGBA;
+    break;
+  default:
+    ERROR("Invalid number of channels %i", channels);
+  }
+  glTexImage2D(GL_TEXTURE_2D, 0, intype, width, height, 0, pixels_channels, GL_FLOAT, pixels);
+  //glGenerateMipmap(GL_TEXTURE_2D);
+  return tex;
+}
+*/
+
 
 u32 compileShader(int program, const char * code){
   u32 ss = glCreateShader(program);
@@ -115,35 +188,6 @@ u32 linkGlProgram(u32 shader_cnt, ...){
   
   return prog;
 }
-
-
-simple_shader load_simple_shader(){
-  simple_shader s = {0};
-  
-  var prog = createShaderFromFiles("simple_shader.vs", "simple_shader.fs");
-  s.prog = prog;
-  s.color_loc = glGetUniformLocation(prog, "color");
-  s.orig_position_loc = glGetUniformLocation(prog, "orig_position");
-  s.orig_size_loc = glGetUniformLocation(prog, "orig_size");
-  s.position_loc = glGetUniformLocation(prog, "position");
-  s.size_loc = glGetUniformLocation(prog, "size");
-  s.tex_loc = glGetUniformLocation(prog, "tex");
-  s.uv_offset_loc = glGetUniformLocation(prog, "uv_offset");
-  s.uv_size_loc = glGetUniformLocation(prog, "uv_size");
-  s.use_texture_loc = glGetUniformLocation(prog, "use_texture");
-  return s;
-}
-
-glow_shader load_glow_shader(){
-  var prog = createShaderFromFiles("glow_shader.vs", "glow_shader.fs");
-  var tex_loc = glGetUniformLocation(prog, "tex");
-  var offset_loc = glGetUniformLocation(prog, "offset");
-  glow_shader shader = {.prog = prog,
-			.tex_loc = tex_loc,
-			.offset_loc = offset_loc};
-  return shader;
-}
-
 
 void debugglcalls(GLenum source,
 		  GLenum type,
