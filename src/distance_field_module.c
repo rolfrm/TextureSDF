@@ -40,14 +40,21 @@ u32 loadImagedf(i16 * pixels, u32 width, u32 height){
 }
 
 typedef struct{
+  u32 shader2;
+  
   u32 texture;
   u32 shader;
   image * img;
+  float aspect;
   
   u32 offset_loc, size_loc;
   u32 texture2;
   image * img2;
-  float x, y;  
+  float x, y;
+
+  u32 df_compute_shader;
+  u32 df_compute_target;
+  u32 df_vert_cnt;
 }dist_field_context;
 
 void render_distance_field(){
@@ -65,11 +72,18 @@ void render_distance_field(){
       //image_delete(&img);
       ctx->texture = texture;
       ctx->img = img;
-      ctx->x = -0.5;
-      ctx->y = -0.5;
+      ctx->x = -0.0;
+      ctx->y = -0.0;
       ctx->offset_loc = 0;
       ctx->size_loc = 1;
     }
+    
+    {
+      u32 vs = compileShaderFromFile(GL_VERTEX_SHADER, "s2.vert");
+      u32 fs = compileShaderFromFile(GL_FRAGMENT_SHADER, "s2.frag");
+      ctx->shader2 = linkGlProgram(2, vs, fs);
+    }
+
     { // load distance field texture
       image * img = image_load("./alien out.png");
       u32 texture = loadImagedf(img->buffer, img->width, img->height);
@@ -81,6 +95,31 @@ void render_distance_field(){
       u32 vs = compileShaderFromFile(GL_VERTEX_SHADER, "s.vert");
       u32 fs = compileShaderFromFile(GL_FRAGMENT_SHADER, "s.frag");
       ctx->shader = linkGlProgram(2, vs, fs);
+    }
+    {
+      u32 shader = compileShaderFromFile(GL_COMPUTE_SHADER, "comp.cs");
+      u32 prog = linkGlProgram(1, shader);
+      ctx->df_compute_shader = prog;
+      u32 verts_cnt = 512;
+      ctx->df_vert_cnt = verts_cnt;
+
+ 
+      u32 buffer[1];
+      glGenBuffers(1, buffer);
+      size_t vsize = verts_cnt * sizeof(f32);
+      float * fbuffer = alloc0(vsize * 2);
+      for(u32 i = 0; i < verts_cnt ; i++){
+	fbuffer[i * 2] = 0;
+	fbuffer[i * 2 + 1] = 0;
+      }
+
+      glBindBuffer(GL_ARRAY_BUFFER, buffer[0]);
+      glBufferData(GL_ARRAY_BUFFER, sizeof(f32) * verts_cnt * 2, fbuffer, GL_STREAM_DRAW);
+
+      glBindBuffer(GL_SHADER_STORAGE_BUFFER, buffer[0]);
+      glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, buffer[0]);
+      ctx->df_compute_target = buffer[0];
+      
     }
   }
   ///ERROR("FINISHED HERE\n");
@@ -120,13 +159,13 @@ void render_distance_field(){
   }
   
   float w = locy - floorf(locy);
-  float d3 =((float)(d1x * (1 - w) + d2x * w) * 0.01) * 0.2;
+  float d3 =((float)(d1x * (1 - w) + d2x * w) * 0.01);
   
   // todo: billinear interpolation. add y axis change.  
 
   glBindTexture(GL_TEXTURE_2D, ctx->texture2);
   glUniform2f(ctx->offset_loc, ctx->x, ctx->y);
-  glUniform2f(ctx->size_loc, d3 / 160.0f, d3 / 160.0f);
+  glUniform2f(ctx->size_loc, d3 / 50, d3 / 50.0f);
   glBindTexture(GL_TEXTURE_2D, ctx->texture2);
   glDrawArrays(GL_TRIANGLE_STRIP,0, 4);
 
@@ -144,14 +183,45 @@ void render_distance_field(){
   if(isKeyDown(GLFW_KEY_RIGHT)){
     ctx->x += 0.001;
   }  
+
+  {
+      glUseProgram(ctx->df_compute_shader);
+      
+      glBindTexture(GL_TEXTURE_2D, ctx->texture);
+      glUniform2f(1, ctx->x, ctx->y);
+      glUniform2f(2, 2.0f / (float)ctx->img->width, 2.0f / (float)ctx->img->height);
+      //glUniform2f(2, 1.23, 1.25);
+      glBindBuffer(GL_ARRAY_BUFFER, ctx->df_compute_target);
+
+      glBindBuffer(GL_SHADER_STORAGE_BUFFER, ctx->df_compute_target);
+      //logd("Dispatch compute...\n");
+      glDispatchCompute(8,8,8);
+      
+      
+      float * data = glMapBufferRange(GL_ARRAY_BUFFER, 0, ctx->df_vert_cnt * 2 * sizeof(float), GL_MAP_READ_BIT);
+      //ASSERT(data != NULL);
+      //for(u32 i =0 ; i < ctx->df_vert_cnt; i++)
+      //	logd("%f %f\n", data[i * 2], data[i * 2 + 1]);
+      logd("Render distance field (%f %f) %f   (%f %f %f)\n",ctx->x, ctx->y, d3 , data[0], d3,data[0]/ d3);
+      glUnmapBuffer(GL_ARRAY_BUFFER);
+  }
+
   
-  logd("Render distance field (%f %f) %f\n",locx, locy, d3);
+  
+  glUseProgram(ctx->shader2);
+  glBindBuffer(GL_ARRAY_BUFFER, ctx->df_compute_target);
+  glEnableVertexAttribArray(0);
+  glVertexAttribPointer(0, 2, GL_FLOAT, false, 0, 0);
+  glUniform2f(0, ctx->x, ctx->y);
+  glUniform2f(1, 1, 1);
+  glDrawArrays(GL_LINE_LOOP, 0, 512);
+  
+
 }
 
 void init_module(){
-  //convert_file_to_distance_field("./distance field test.png", "distance field out.png");
-  //convert_file_to_distance_field("./alien.png", "alien out.png", 3);
-  //distance_field_convert_test();
+  //convert_file_to_distance_field("./distance field test.png", "distance field out.png", 20);
+  //convert_file_to_distance_field("./alien.png", "alien out.png", 5);
   gl_render_distance_field = intern_string("dist/render");
   register_method(gl_render_distance_field, render_distance_field);
   register_event(gl_render_distance_field, gl_post_render, false);

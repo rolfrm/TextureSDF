@@ -5,24 +5,36 @@ layout(std430, binding = 0) buffer dest
   float data[];
 };
 
-layout(local_size_x = 16, local_size_y = 1) in;
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 8) in;
 
-float trace_distance(vec2 p, vec2 direction){
-  float distance = 0.0;
-  while(distance < 500){
-      float d = 10 - length(p);
-    p = p + direction * d;
-    distance += d;
-    if(d < 1)
-      return distance;
-  }
-  return 500;
-}
-#define M_PI 3.14
+layout(location = 0) uniform sampler2D tex;
+layout(location = 1) uniform vec2 start;
+layout(location = 2) uniform vec2 scale;
+
+#define M_PI 3.14159265359
 void main(){
-  int index = int(gl_GlobalInvocationID.x);
-  uint points = 32;
+  int index = int(gl_GlobalInvocationID.x) + int(gl_GlobalInvocationID.y) * 8 + int(gl_GlobalInvocationID.z) * 64;
+  uint points = 512;
   float angle = 2.0 * M_PI * float(index) / float(points);
-  data[index * 2 + 0] = angle;
-  data[index * 2 + 1] = trace_distance(vec2(0,0), vec2(sin(angle),cos(angle)));
+  
+  float distance = 0.0;
+  vec2 p = start;
+  vec2 direction = vec2(sin(angle),cos(angle));
+  
+  while(distance < 10){
+      float x = texture(tex, p * 0.5 - vec2(0.5)).x * 0.05;
+    
+    x = x / scale.x;
+    p = p + direction * x;
+    distance += x;
+    
+    if(x <= 0.0015)
+      break;
+  }
+  //data[0] = texture(tex, start).x;
+  //data[1] = texture(tex, start).x;
+  direction = direction * distance;
+  data[index * 2 + 0] = direction.x;
+  data[index * 2 + 1] = direction.y;
+  
 }

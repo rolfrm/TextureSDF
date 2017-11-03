@@ -21,7 +21,7 @@ void convert_to_distance_field(const u8 * g_image, int in_width, int in_height, 
   }
   
   vec2 scale = vec2_new((float) out_width / (float)in_width, (float) out_height / (float)in_height);
-  
+  //vec2 scale2 = vec2_new(in_width, in_height);
   for(int _y = 0; _y < out_height; _y++){
     //    logd("Y: %i\n", _y);
     for(int _x = 0; _x < out_width; _x++){
@@ -31,7 +31,7 @@ void convert_to_distance_field(const u8 * g_image, int in_width, int in_height, 
       vec2 p2 = vec2_div(p, scale);
 
       u8 value = lookup((int)p2.x, (int)p2.y);
-
+      
       float mind = 10000;
       for( int __y = 0; __y < in_height; __y++){
 	for( int __x = 0; __x < in_width; __x++){
@@ -40,7 +40,7 @@ void convert_to_distance_field(const u8 * g_image, int in_width, int in_height, 
 
 	    vec2 p3 = vec2_new(__x, __y);
 
-	    float d = vec2_len(vec2_sub(p3, p2));
+	    float d = vec2_len(vec2_mul(vec2_sub(p3, p2), scale));
 	    mind = MIN(d, mind);
 	  }	  
 	}

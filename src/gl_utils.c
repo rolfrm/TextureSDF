@@ -133,12 +133,13 @@ u32 compileShader(int program, const char * code){
     logd("%s", buffer);
     dealloc(buffer);
   } else{
-    logd("Compiled shader with success\n");
+    logd("--- Success\n");
   }
   return ss;
 }
 
 u32 compileShaderFromFile(u32 gl_prog_type, const char * filepath){
+  logd("Compiling shader '%s'\n", filepath);
   char * vcode = read_file_to_string(filepath);
   u32 vs = compileShader(gl_prog_type, vcode);
   dealloc(vcode);

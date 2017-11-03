@@ -295,7 +295,7 @@ void neon_engine_main(){
     u64 ts = timestamp();
 
     event_table_weight * table_weight = get_event_table_weight();
-    event_table_weight_print(table_weight);
+    //event_table_weight_print(table_weight);
     for(u32 i = 0; i < table_weight->count; i++){
       method_ptr p = get_registered_method(table_weight->method[i + 1]);
       if(p == NULL) continue;
@@ -305,7 +305,7 @@ void neon_engine_main(){
     u64 ts2 = timestamp();
     var seconds_spent = ((double)(ts2 - ts) * 1e-6);
     
-    logd("%f s \n", seconds_spent);
+    //logd("%f s \n", seconds_spent);
     if(seconds_spent < 0.016){
       iron_sleep(0.016 - seconds_spent);
     }

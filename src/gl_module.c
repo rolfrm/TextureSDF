@@ -74,14 +74,14 @@ void pre_render_scene(){
   glClearColor(1, 1, 1, 1);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-  logd("Pre render\n");
+  //logd("Pre render\n");
 }
 
 void post_render_scene(){
   gl_context_data * ctx = get_or_init_context();
   glfwPollEvents();
   glfwSwapBuffers(ctx->window);
-  logd("Post render\n");
+  //logd("Post render\n");
 }
 
 void init_module(){
