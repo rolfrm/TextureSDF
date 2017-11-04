@@ -10,6 +10,7 @@
 #include <iron/mem.h>
 #include <iron/image.h>
 #include <iron/utils.h>
+#include <iron/linmath.h>
 
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
@@ -56,7 +57,7 @@ typedef struct{
   u32 df_compute_target;
   u32 df_vert_cnt;
 }dist_field_context;
-
+#define POINTS 1024 * 32
 void render_distance_field(){
   static module_data cx;
   dist_field_context * ctx = get_module_data(&cx);
@@ -100,7 +101,7 @@ void render_distance_field(){
       u32 shader = compileShaderFromFile(GL_COMPUTE_SHADER, "comp.cs");
       u32 prog = linkGlProgram(1, shader);
       ctx->df_compute_shader = prog;
-      u32 verts_cnt = 512;
+      u32 verts_cnt = POINTS;
       ctx->df_vert_cnt = verts_cnt;
 
  
@@ -131,35 +132,13 @@ void render_distance_field(){
   glUniform2f(ctx->offset_loc, 0, 0);
   glUniform2f(ctx->size_loc, 1.0f, 1.0f);
   glBindTexture(GL_TEXTURE_2D, ctx->texture);
-  glDrawArrays(GL_TRIANGLE_STRIP,0, 4);
+  //glDrawArrays(GL_TRIANGLE_STRIP,0, 4);
 
+  vec2 pos = vec2_new(ctx->x, ctx->y);
+
+  pos = vec2_mul(vec2_scale(vec2_add(pos, vec2_new(1, 1)), 0.5f), vec2_new(ctx->img->width, ctx->img->height));
   
-
-
-  f32 locx = (ctx->x + 1) * ctx->img->width * 0.5;
-  f32 locy = (ctx->y + 1) * ctx->img->height * 0.5;
-  
-  int idx = (((int)locx) + ((int)locy) * ctx->img->width);
-
-  float d1x, d2x;
-  {
-    i16 d = ((i16 *) ctx->img->buffer)[idx];
-    i16 d2 = ((i16 *) ctx->img->buffer)[idx + 1];
-    float w = locx - floorf(locx);
-    float d3 =(float)(d * (1 - w) + d2 * w);
-    d1x = d3;
-  }
-
-  {
-    i16 d = ((i16 *) ctx->img->buffer)[idx + ctx->img->width];
-    i16 d2 = ((i16 *) ctx->img->buffer)[idx + 1 + ctx->img->width];
-    float w = locx - floorf(locx);
-    float d3 = (float)(d * (1 - w) + d2 * w);
-    d2x = d3;    
-  }
-  
-  float w = locy - floorf(locy);
-  float d3 =((float)(d1x * (1 - w) + d2x * w) * 0.01);
+  float d3 = distance_to_field(ctx->img, pos);
   
   // todo: billinear interpolation. add y axis change.  
 
@@ -190,19 +169,19 @@ void render_distance_field(){
       glBindTexture(GL_TEXTURE_2D, ctx->texture);
       glUniform2f(1, ctx->x, ctx->y);
       glUniform2f(2, 2.0f / (float)ctx->img->width, 2.0f / (float)ctx->img->height);
+      glUniform1i(3, POINTS);
       //glUniform2f(2, 1.23, 1.25);
       glBindBuffer(GL_ARRAY_BUFFER, ctx->df_compute_target);
-
-      glBindBuffer(GL_SHADER_STORAGE_BUFFER, ctx->df_compute_target);
-      //logd("Dispatch compute...\n");
-      glDispatchCompute(8,8,8);
       
+      glBindBuffer(GL_SHADER_STORAGE_BUFFER, ctx->df_compute_target);
+      glDispatchCompute(ctx->df_vert_cnt,1,1);
+      glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
       
       float * data = glMapBufferRange(GL_ARRAY_BUFFER, 0, ctx->df_vert_cnt * 2 * sizeof(float), GL_MAP_READ_BIT);
       //ASSERT(data != NULL);
       //for(u32 i =0 ; i < ctx->df_vert_cnt; i++)
       //	logd("%f %f\n", data[i * 2], data[i * 2 + 1]);
-      logd("Render distance field (%f %f) %f   (%f %f %f)\n",ctx->x, ctx->y, d3 , data[0], d3,data[0]/ d3);
+      logd("Render distance field (%f %f) %f   (%f %f %f)\n",pos.x, pos.y, d3 , data[0], d3,data[0]/ d3);
       glUnmapBuffer(GL_ARRAY_BUFFER);
   }
 
@@ -214,12 +193,13 @@ void render_distance_field(){
   glVertexAttribPointer(0, 2, GL_FLOAT, false, 0, 0);
   glUniform2f(0, ctx->x, ctx->y);
   glUniform2f(1, 1, 1);
-  glDrawArrays(GL_LINE_LOOP, 0, 512);
+  glDrawArrays(GL_LINE_LOOP, 0, ctx->df_vert_cnt);
   
 
 }
 
 void init_module(){
+  distance_field_convert_test();
   //convert_file_to_distance_field("./distance field test.png", "distance field out.png", 20);
   //convert_file_to_distance_field("./alien.png", "alien out.png", 5);
   gl_render_distance_field = intern_string("dist/render");

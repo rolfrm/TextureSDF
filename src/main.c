@@ -35,8 +35,6 @@ typedef struct{
 #include "intern_string_vector_2.c"
 #include "intern_string_vector_3.c"
 
-#include "distance_field.h"
-
 #include "neon.h"
 #include "method_table.h"
 #include "method_table.c"
@@ -305,7 +303,7 @@ void neon_engine_main(){
     u64 ts2 = timestamp();
     var seconds_spent = ((double)(ts2 - ts) * 1e-6);
     
-    //logd("%f s \n", seconds_spent);
+    logd("%f s \n", seconds_spent);
     if(seconds_spent < 0.016){
       iron_sleep(0.016 - seconds_spent);
     }
