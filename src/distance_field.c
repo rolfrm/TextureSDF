@@ -71,29 +71,6 @@ void convert_file_to_distance_field(const char * in_path, const char * out_path,
     ERROR("Invalid result\n");  
 }
 
-/*
-float distance_to_field_nearest(image * df, vec2 p){
-  vec2 c = p;
-  if(c.x < 0)
-    c.x = 0;
-  
-  if(c.x >= df->width)
-    c.x = df->width - 1;
-  
-  if(c.y < 0)
-    c.y = 0;
-
-  if(c.y > df->height - 1)
-    c.y = df->height - 1;
-  
-  i16 * img = df->buffer;
-  int index = ((int)c.x) + ((int) c.y) * df->width;
-  float d = img[index];
-  d = d * 0.01;
-
-  return vec2_len(vec2_sub(p, c)) + d;
-  }*/
-
 float distance_to_field(image * df, vec2 p){
   vec2 c = p;
   bool onex = false; // skip interpolate x-axis?
@@ -113,7 +90,7 @@ float distance_to_field(image * df, vec2 p){
     c.y = 0;
   }
 
-  if(c.y > df->height - 1){
+  if(c.y >= df->height){
     c.y = df->height - 1;
     oney = true;
   }
@@ -131,16 +108,17 @@ float distance_to_field(image * df, vec2 p){
 
   int idx = idx_x + idx_y * df->width;
   float d1x, d2x;
-  
-  i16 d1 = buffer[idx];
 
-  if(onex){
-    d1x = d1;
-  }else{
-    i16 d2 = buffer[idx + 1];
-    float w = c.x - floorf(c.x);
-    float d3 =(float)(d1 * (1 - w) + d2 * w);
-    d1x = d3;
+  {
+    float d1 = (float)buffer[idx];
+    if(onex){
+      d1x = d1;
+    }else{
+      i16 d2 = buffer[idx + 1];
+      float w = c.x - floorf(c.x);
+      float d3 =  d1 * (1 - w) + d2 * w;
+      d1x = d3;
+    }
   }
   
   float d = 0.0;
@@ -158,9 +136,48 @@ float distance_to_field(image * df, vec2 p){
       d2x = d3;
     }
     float w = c.y - floorf(c.y);
-    d =((float)(d1x * (1 - w) + d2x * w));    
+    d = d1x * (1.0f - w) + d2x * w;    
   }
   return vec2_len(vec2_sub(p, c)) + d * 0.01;
+}
+
+bool distance_field_collide(image * img1, image * map, vec2 pos, float scale){
+  vec2 mp = vec2_new(map->width * 0.5f, map->height * 0.5f);
+  vec2 mp2 = vec2_new(img1->width * 0.5f, img1->height * 0.5f);
+  bool collides(vec2 p, vec2 s, int it){
+
+    if(it == 0) return true;
+    
+    let p2 = vec2_add(vec2_add(vec2_scale(p, 1.0 / scale), pos), mp);
+    // p2 is the location inside the map.
+    float dlim = vec2_len(s);
+
+    float d2 = distance_to_field(map, p2);
+    logd(" %i ", it);
+    //vec2_print(p2);vec2_print(s);
+    //logd("%f ", dlim / scale);
+    if(d2 * scale > dlim + 0.2 * scale) {
+      logd(" >>> %f > %f\n", d2 * scale, dlim);
+      return false;
+    }
+
+    float d3 = distance_to_field(img1, vec2_add(p, mp2));
+    logd(" << %f %f\n", d3, d2);
+    if(d3 > dlim + 0.1) return false;
+    
+    vec2 s2 = vec2_scale(s, 0.5);
+    for(float i = -0.5f; i <= 0.5f; i += 1.0f){
+      for(float j = -0.5f; j <= 0.5f; j += 1.0f){
+	//logd("---> %f %f\n", i, j);
+	vec2 p2 = vec2_new(p.x + i * s2.x, p.y + j * s2.y);
+	if(collides(p2, s2, it - 1))
+	  return true;
+      }
+    }
+    return false;
+  }
+  let s1 = vec2_new(img1->width, img1->height);
+  return collides(vec2_new(0, 0), s1, 8);
 }
 
 void distance_field_convert_test()
@@ -183,4 +200,9 @@ void distance_field_convert_test()
     logd("   %f\n", f);
   }
 
+  for(float i = -50; i < 100; i += 1){
+    bool df = distance_field_collide(img, img, vec2_new(i,0), 1.0f);
+    logd(" %f %i \n",i, df);
+  }
+  //ERROR("!!");
 }

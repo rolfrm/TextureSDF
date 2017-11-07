@@ -132,19 +132,19 @@ void render_distance_field(){
   glUniform2f(ctx->offset_loc, 0, 0);
   glUniform2f(ctx->size_loc, 1.0f, 1.0f);
   glBindTexture(GL_TEXTURE_2D, ctx->texture);
-  //glDrawArrays(GL_TRIANGLE_STRIP,0, 4);
+  glDrawArrays(GL_TRIANGLE_STRIP,0, 4);
 
   vec2 pos = vec2_new(ctx->x, ctx->y);
 
   pos = vec2_mul(vec2_scale(vec2_add(pos, vec2_new(1, 1)), 0.5f), vec2_new(ctx->img->width, ctx->img->height));
   
-  float d3 = distance_to_field(ctx->img, pos);
-  
+  float d3 = distance_to_field(ctx->img, vec2_sub(pos, vec2_new(0.5, 0.5)));
+  //d3 = 2;
   // todo: billinear interpolation. add y axis change.  
 
   glBindTexture(GL_TEXTURE_2D, ctx->texture2);
   glUniform2f(ctx->offset_loc, ctx->x, ctx->y);
-  glUniform2f(ctx->size_loc, d3 / 50, d3 / 50.0f);
+  glUniform2f(ctx->size_loc, 4.0 / 50.0, 4.0 / 50.0);// d3 / 50, d3 / 50.0f);
   glBindTexture(GL_TEXTURE_2D, ctx->texture2);
   glDrawArrays(GL_TRIANGLE_STRIP,0, 4);
 
@@ -161,8 +161,15 @@ void render_distance_field(){
   }
   if(isKeyDown(GLFW_KEY_RIGHT)){
     ctx->x += 0.001;
-  }  
-
+  }
+  
+  pos = vec2_new(ctx->x * ctx->img->width * 0.5, ctx->y* ctx->img->height  * 0.5);
+  
+  bool collides = distance_field_collide(ctx->img2, ctx->img, vec2_sub(pos, vec2_new(0.5f, 0.5f)), 12.5f);
+  vec2_print(pos); logd("%f ", d3);
+  d3 = 2;
+  logd("Collides? %i\n", collides);
+  
   {
       glUseProgram(ctx->df_compute_shader);
       
@@ -201,7 +208,7 @@ void render_distance_field(){
 void init_module(){
   distance_field_convert_test();
   //convert_file_to_distance_field("./distance field test.png", "distance field out.png", 20);
-  //convert_file_to_distance_field("./alien.png", "alien out.png", 5);
+  convert_file_to_distance_field("./alien2.png", "alien out.png", 5);
   gl_render_distance_field = intern_string("dist/render");
   register_method(gl_render_distance_field, render_distance_field);
   register_event(gl_render_distance_field, gl_post_render, false);
